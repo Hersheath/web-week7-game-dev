@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zero Zombie</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  </head>
+  <body>
+    <div>try your best, don't let zombie escape, press spacebar to drop bomb.</h1>
+    <script>
+      let game;
+      const gameOptions = {
+        playerSpeed: 400,
+        bombSpeed: 500,
+        zombieSpeed: 100,
+        spawnDelay: 3000
+      };
+
+      window.onload = function () {
+        let gameConfig = {
+          type: Phaser.AUTO,
+          backgroundColor: "#112211",
+          scale: {
+            mode: Phaser.Scale.FIT,
+            autoCenter: Phaser.Scale.CENTER_BOTH,
+            width: 800,
+            height: 400
+          },
+          pixelArt: true,
+          physics: {
+            default: "arcade",
+            arcade: {
+              gravity: {
+                y: 3000
+              }
+            }
+          },
+          scene: PlayGame
+        };
+
+        game = new Phaser.Game(gameConfig);
+        window.focus();
+      };
+
+      class PlayGame extends Phaser.Scene {
+        constructor() {
+          super("PlayGame");
+          this.zombieCount = 0;
+          this.zombieCountText;
+        }
+
+        preload() {
+          //load assets image
+          this.load.image("backgroud", "assets/bg.jpg");
+          this.load.image("ground", "assets/platform.png");
+          this.load.image("player", "assets/plane.png");
+          this.load.image("bomb", "assets/bomb.png");
+          this.load.image("explosion", "assets/bombing.png");
+          this.load.image("zombie", "assets/zombie1.png");
+        }
+
+        create() {
+          // Create the ground
+          this.ground = this.physics.add.staticGroup();
+          this.ground
+            .create(game.config.width / 2, game.config.height + 50, "ground")
+            .setScale(6)
+            .refreshBody();
+          //set backgroud
+          this.backgroud = this.add.image(400, 160, "backgroud").setScale(1.8);
+          this.backgroundSpeed = 50;
+
+          //create player
+          this.player = this.physics.add.sprite(
+            game.config.width / 6,
+            game.config.height / 2,
+            "player"
+          );
+          this.player.setScale(0.07); //make player looks smaller
+          this.player.setCollideWorldBounds(true);
+
+          // setting controls
+          this.cursors = this.input.keyboard.createCursorKeys();
+          this.spacebar = this.input.keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.SPACE
+          );
+
+          this.bombs = this.physics.add.group();
+          // zombie group
+          this.zombies = this.physics.add.group();
+          this.spawnZombies();
+
+          // physics
+          this.physics.add.collider(this.player, this.ground);
+          this.physics.add.collider(this.zombies, this.ground);
+          // gameover if player meet zombie
+          this.physics.add.collider(
+            this.player,
+            this.zombies,
+            this.gameOver,
+            null,
+            this
+          );
+          //zombie is dead if being shot by a bomb
+          this.physics.add.collider(
+            this.bombs,
+            this.zombies,
+            this.hitZombie,
+            null,
+            this
+          );
+
+          // Create the zombie count text
+          this.zombieCountText = this.add.text(
+            game.config.width - 10,
+            10,
+            `Zombies Killed: ${this.zombieCount}`,
+            {
+              fontFamily: "Arial, sans-serif",
+              fontSize: "18px",
+              color: "#ff0000",
+              align: "right"
+            }
+          );
+          this.zombieCountText.setOrigin(1, 0);
+        }
+
+        update() {
+          //controls setting
+          if (this.cursors.left.isDown) {
+            this.player.setVelocityX(-gameOptions.playerSpeed);
+          } else if (this.cursors.right.isDown) {
+            this.player.setVelocityX(gameOptions.playerSpeed);
+          } else {
+            this.player.setVelocityX(0);
+          }
+
+          if (this.cursors.up.isDown) {
+            this.player.setVelocityY(-gameOptions.playerSpeed);
+          } else if (this.cursors.down.isDown) {
+            this.player.setVelocityY(gameOptions.playerSpeed);
+          } else {
+            this.player.setVelocityY(0);
+          }
+
+          if (this.spacebar.isDown) {
+            this.dropBomb();
+          }
+          // Move the zombies
+          this.zombies.getChildren().forEach((zombie) => {
+            // Check if the zombie is currently moving left or right
+            const isMovingLeft = zombie.body.velocity.x < 0;
+
+            // If the zombie is not moving horizontally, randomly choose a direction
+            if (zombie.body.velocity.x === 0) {
+              const direction = Phaser.Math.RND.pick([-1, 1]); // Randomly choose -1 (left) or 1 (right)
+              zombie.setVelocityX(gameOptions.zombieSpeed * direction);
+            }
+
+          });
+        }
+
+        dropBomb() {
+          const bomb = this.physics.add
+            .sprite(this.player.x, this.player.y, "bomb")
+            .setScale(0.03);
+        this.bombs.add(bomb);
+        }
+
+        spawnZombies() {
+          const x = Phaser.Math.Between(
+            game.config.width / 2 - 60,
+            game.config.width-60
+          );
+          const y = game.config.height - 120; // Set the initial y position just above the ground
+
+          const zombie = this.physics.add.sprite(x, y, "zombie").setScale(0.04);
+          zombie.setVelocityY(-gameOptions.zombieSpeed);
+          //zombie.anims.play("zombieWalk", true);
+
+          this.zombies.add(zombie);
+
+          this.time.addEvent({
+            delay: gameOptions.spawnDelay,
+            callback: this.spawnZombies,
+            callbackScope: this,
+            loop: false
+          });
+        }
+
+        hitZombie(bomb, zombie) {
+          bomb.destroy();
+          zombie.destroy();
+          this.zombieCount++; // Increment the zombie count
+          this.zombieCountText.setText(`Zombies Killed: ${this.zombieCount}`);
+          // Create an explosion sprite at the zombie's position
+          const explosion = this.add.sprite(zombie.x, zombie.y, "explosion");
+          explosion.setScale(0.05);
+          // Destroy the explosion after a short delay
+          this.time.addEvent({
+            delay: 500,
+            callback: () => {
+              explosion.destroy();
+            },
+            callbackScope: this
+          });
+        }
+
+        gameOver() {
+          this.scene.restart();
+        }
+      }
+    </script>
+  </body>
+</html>
